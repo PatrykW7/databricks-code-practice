@@ -96,6 +96,8 @@ tt_ex1_result.writeTo("tt_ex1_result").create()
 # Your code here    
 
 
+
+
 # COMMAND ----------
 
 # Validate Exercise 1
