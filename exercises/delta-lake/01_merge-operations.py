@@ -673,7 +673,7 @@ assert result.filter("customer_id = 'CUST-010'").count() == 1, \
     "CUST-010 should be inserted as new customer"
 assert result.filter("customer_id = 'CUST-002' AND is_current = true").count() == 1, \
     "CUST-002 should be unchanged"
-
+   
 print("Exercise 8 passed!")
 
 # --- Idempotency check (manual) ---
@@ -710,6 +710,32 @@ print("Idempotency: re-run your TODO cell then this cell. Assertions must still 
 
 # COMMAND ----------
 
+# MAGIC %sql
+# MAGIC CREATE TABLE merge_ex9_target_copy CLONE merge_ex9_target;
+# MAGIC CREATE TABLE merge_ex9_source_copy CLONE merge_ex9_source
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC SELECT * FROM merge_ex9_target_copy;
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC SELECT * FROM merge_ex9_source_copy;
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC
+# MAGIC MERGE WITH SCHEMA EVOLUTION INTO merge_ex9_target_copy tgt
+# MAGIC USING merge_ex9_source_copy src ON tgt.order_id = src.order_id
+# MAGIC WHEN MATCHED THEN UPDATE SET *
+# MAGIC WHEN NOT MATCHED THEN INSERT *
+# MAGIC
+
+# COMMAND ----------
+
 # EXERCISE_KEY: merge_ex9
 # TODO: Write your solution here
 
@@ -719,7 +745,9 @@ print("Idempotency: re-run your TODO cell then this cell. Assertions must still 
 # COMMAND ----------
 
 # Validate Exercise 9
-result = spark.table(f"{CATALOG}.{SCHEMA}.merge_ex9_target")
+CATALOG = "db_code"
+SCHEMA = "merge_operations"
+result = spark.table(f"{CATALOG}.{SCHEMA}.merge_ex9_target_copy")
 
 assert result.count() == 6, f"Expected 6 rows, got {result.count()}"
 assert "discount_pct" in result.columns, \

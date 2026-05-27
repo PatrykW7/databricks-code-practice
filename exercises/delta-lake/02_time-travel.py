@@ -1,5 +1,4 @@
 # Databricks notebook source
-# COMMAND ----------
 # MAGIC %md
 # MAGIC # Time Travel & Restore
 # MAGIC **Topic**: Delta Lake | **Exercises**: 7 | **Checkpoints**: 1 | **Total Time**: ~90 min
@@ -33,6 +32,7 @@
 # MAGIC %run ./setup/time-travel-setup
 
 # COMMAND ----------
+
 # MAGIC %md
 # MAGIC **Setup complete.** Exercise tables are in `{CATALOG}.{SCHEMA}` (time_travel schema).
 # MAGIC Base tables (orders, customers) are in `{CATALOG}.{BASE_SCHEMA}` (delta_lake schema).
@@ -51,6 +51,7 @@
 # MAGIC assertions work regardless of auto-OPTIMIZE behavior. Version 0 (CTAS) is always safe.
 
 # COMMAND ----------
+
 # MAGIC %md
 # MAGIC ## Exercise 1: Query by Version Number
 # MAGIC **Difficulty**: Easy | **Time**: ~5 min
@@ -70,6 +71,25 @@
 
 # COMMAND ----------
 
+# MAGIC %sql
+# MAGIC USE CATALOG db_code;
+# MAGIC USE SCHEMA time_travel;
+
+# COMMAND ----------
+
+df_curr = spark.read.table("db_code.time_travel.tt_ex1_orders").show()
+
+# COMMAND ----------
+
+tt_ex1_result = spark.read\
+    .format("delta")\
+    .option("versionAsOf", "0")\
+    .table("db_code.time_travel.tt_ex1_orders")
+
+tt_ex1_result.writeTo("tt_ex1_result").create()
+
+# COMMAND ----------
+
 # EXERCISE_KEY: tt_ex1
 # TODO: Query the table at version 0 and save to tt_ex1_result
 
@@ -79,6 +99,8 @@
 # COMMAND ----------
 
 # Validate Exercise 1
+CATALOG = "db_code"
+SCHEMA = "time_travel"
 result = spark.table(f"{CATALOG}.{SCHEMA}.tt_ex1_result")
 
 assert result.count() == 5, f"Expected 5 rows at version 0, got {result.count()}"
@@ -88,6 +110,7 @@ assert result.filter("order_id = 'ORD-005'").count() == 1, \
 print("Exercise 1 passed!")
 
 # COMMAND ----------
+
 # MAGIC %md
 # MAGIC ## Exercise 2: Query by Timestamp
 # MAGIC **Difficulty**: Easy | **Time**: ~10 min
@@ -130,6 +153,7 @@ assert result.filter("order_id = 'ORD-003'").select("amount").collect()[0][0] ==
 print("Exercise 2 passed!")
 
 # COMMAND ----------
+
 # MAGIC %md
 # MAGIC ## Checkpoint 3: DESCRIBE HISTORY
 # MAGIC **Time**: ~5 min
@@ -182,6 +206,7 @@ assert row.num_dml_operations == TT_EX3_DML_COUNT, \
 print("Exercise 3 passed!")
 
 # COMMAND ----------
+
 # MAGIC %md
 # MAGIC ## Exercise 4: RESTORE to Previous Version
 # MAGIC **Difficulty**: Medium | **Time**: ~10 min
@@ -222,6 +247,7 @@ assert result.filter("amount > 0").count() == 5, \
 print("Exercise 4 passed!")
 
 # COMMAND ----------
+
 # MAGIC %md
 # MAGIC ## Exercise 5: Diff Two Versions
 # MAGIC **Difficulty**: Medium | **Time**: ~15 min
@@ -272,6 +298,7 @@ assert "ORD-101" in changed_ids, "ORD-101 was added and should be in changes"
 print("Exercise 5 passed!")
 
 # COMMAND ----------
+
 # MAGIC %md
 # MAGIC ## Exercise 6: Audit Trail
 # MAGIC **Difficulty**: Medium | **Time**: ~15 min
@@ -323,6 +350,7 @@ assert row.bad_order_id == "ORD-999", f"Bad order_id is ORD-999, got {row.bad_or
 print("Exercise 6 passed!")
 
 # COMMAND ----------
+
 # MAGIC %md
 # MAGIC ## Exercise 7: Selective Undo via MERGE + Time Travel
 # MAGIC **Difficulty**: Hard | **Time**: ~20 min
@@ -374,6 +402,7 @@ assert bad_rows == 0, f"Found {bad_rows} incorrectly cancelled rows (amount < 10
 print("Exercise 7 passed!")
 
 # COMMAND ----------
+
 # MAGIC %md
 # MAGIC ## Exercise 8: Reproducible Reporting with Time Travel
 # MAGIC **Difficulty**: Hard | **Time**: ~15 min
