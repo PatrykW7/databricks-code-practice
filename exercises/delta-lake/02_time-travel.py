@@ -93,7 +93,7 @@ tt_ex1_result.writeTo("tt_ex1_result").create()
 # EXERCISE_KEY: tt_ex1
 # TODO: Query the table at version 0 and save to tt_ex1_result
 
-# Your code here
+# Your code here    
 
 
 # COMMAND ----------
