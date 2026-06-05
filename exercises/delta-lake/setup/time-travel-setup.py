@@ -1,5 +1,4 @@
 # Databricks notebook source
-# COMMAND ----------
 # MAGIC %md
 # MAGIC ### Setup: Time Travel & Restore
 # MAGIC Creates per-exercise tables with version history. Run automatically via `%run` from the exercise notebook.
@@ -166,6 +165,9 @@ for r in _hist6:
 
 # --- Exercise 7: Selective Undo via MERGE + Time Travel ---
 # v0: Create table (5 rows)
+CATALOG = "db_code"
+SCHEMA = "time_travel"
+BASE_SCHEMA = "delta_lake"
 spark.sql(f"""
     CREATE OR REPLACE TABLE {CATALOG}.{SCHEMA}.tt_ex7_orders
     AS SELECT * FROM {CATALOG}.{BASE_SCHEMA}.orders
@@ -202,6 +204,10 @@ spark.sql(f"""
 _hist8 = spark.sql(f"DESCRIBE HISTORY {CATALOG}.{SCHEMA}.tt_ex8_orders").orderBy("version").collect()
 TT_EX8_INSERT_V = next(r.version for r in _hist8 if r.operation == 'WRITE')
 TT_EX8_BAD_UPDATE_V = max(r.version for r in _hist8 if r.operation == 'UPDATE')
+
+# COMMAND ----------
+
+TT_EX8_INSERT_V
 
 # COMMAND ----------
 

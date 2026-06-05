@@ -72,8 +72,21 @@
 # COMMAND ----------
 
 # MAGIC %sql
+# MAGIC SHOW CURRENT SCHEMA;
+
+# COMMAND ----------
+
+# MAGIC %sql
 # MAGIC USE CATALOG db_code;
 # MAGIC USE SCHEMA time_travel;
+
+# COMMAND ----------
+
+spark.read\
+    .format("delta")\
+    .option("versionAsOf", 0)\
+    .table("tt_ex1_orders")  
+#    .show()
 
 # COMMAND ----------
 
@@ -135,15 +148,29 @@ print("Exercise 1 passed!")
 
 # COMMAND ----------
 
+# MAGIC %sql
+# MAGIC DESCRIBE HISTORY tt_ex2_orders
+# MAGIC -- 2026-05-27T18:42:54.000+00:00
+
+# COMMAND ----------
+
 # EXERCISE_KEY: tt_ex2
 # TODO: Look up the UPDATE operation's timestamp via DESCRIBE HISTORY, then query with TIMESTAMP AS OF and save to tt_ex2_result
-
+df = spark.read\
+           .format("delta")\
+           .option("timestampAsOf", "2026-05-27T18:42:58.000+00:00")\
+            .table("tt_ex2_orders")
+           
+#df.show()
 # Your code here
+df.writeTo("tt_ex2_result").createOrReplace()
 
 
 # COMMAND ----------
 
 # Validate Exercise 2
+CATALOG = "db_code"
+SCHEMA = "time_travel"
 result = spark.table(f"{CATALOG}.{SCHEMA}.tt_ex2_result")
 
 assert result.count() == 5, f"Expected 5 rows at the UPDATE version, got {result.count()}"
@@ -179,12 +206,27 @@ print("Exercise 2 passed!")
 
 # COMMAND ----------
 
+# MAGIC %sql
+# MAGIC DESCRIBE HISTORY tt_ex3_orders
+
+# COMMAND ----------
+
+# I
+hist = spark.sql("DESCRIBE HISTORY tt_ex3_orders")
+_ = hist.select(["version", "operation"]).orderBy("version", ascending = False)
+# II
+last_op = _.select("operation").take(1)[0][0]#.show()
+# III
+licz = _.filter('operation <> "OPTIMIZE"').count()
+
+# COMMAND ----------
+
 # EXERCISE_KEY: tt_ex3
 # TODO: Run DESCRIBE HISTORY on tt_ex3_orders, then fill in what you observe
 
-total_versions = 0        # Replace: how many versions (rows) does the history show?
-last_dml_operation = ""   # Replace: what is the operation type of the LATEST version? (e.g., "UPDATE", "DELETE", "WRITE", "OPTIMIZE")
-num_dml_operations = 0    # Replace: how many DML operations (non-OPTIMIZE) are in the history?
+total_versions = hist.count()        # Replace: how many versions (rows) does the history show?
+last_dml_operation = last_op   # Replace: what is the operation type of the LATEST version? (e.g., "UPDATE", "DELETE", "WRITE", "OPTIMIZE")
+num_dml_operations = licz    # Replace: how many DML operations (non-OPTIMIZE) are in the history?
 
 spark.sql(f"""
     CREATE OR REPLACE TABLE {CATALOG}.{SCHEMA}.tt_ex3_history AS
@@ -226,6 +268,19 @@ print("Exercise 3 passed!")
 # MAGIC
 # MAGIC **Constraints**:
 # MAGIC - RESTORE creates a new version (history is preserved, not deleted)
+
+# COMMAND ----------
+
+df = spark.read\
+    .format("delta")\
+    .table("tt_ex4_orders")
+df.writeTo("tt_ex4_orders_copy").createOrReplace()
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC DESCRIBE HISTORY tt_ex4_orders;
+# MAGIC RESTORE TABLE tt_ex4_orders TO VERSION AS OF 0
 
 # COMMAND ----------
 
@@ -280,15 +335,60 @@ print("Exercise 4 passed!")
 
 # COMMAND ----------
 
-# EXERCISE_KEY: tt_ex5
-# TODO: Find order_ids that changed between version 0 and current
+# MAGIC %sql
+# MAGIC DESCRIBE HISTORY tt_ex5_orders
 
-# Your code here
+# COMMAND ----------
 
+# MAGIC %sql
+# MAGIC WITH v_0 AS (
+# MAGIC     SELECT * FROM tt_ex5_orders VERSION AS OF 0
+# MAGIC )
+# MAGIC SELECT * FROM v_0
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC SELECT * FROM tt_ex5_orders
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC --# EXERCISE_KEY: tt_ex5
+# MAGIC --# TODO: Find order_ids that changed between version 0 and current
+# MAGIC CREATE TABLE tt_ex5_changes AS
+# MAGIC WITH v_0 AS (
+# MAGIC     SELECT * FROM tt_ex5_orders VERSION AS OF 0
+# MAGIC ),
+# MAGIC
+# MAGIC CTE AS (
+# MAGIC     (SELECT * FROM tt_ex5_orders
+# MAGIC     EXCEPT 
+# MAGIC     SELECT * FROM v_0
+# MAGIC     )
+# MAGIC
+# MAGIC     UNION ALL
+# MAGIC
+# MAGIC     (SELECT * FROM v_0
+# MAGIC     EXCEPT 
+# MAGIC     SELECT * FROM tt_ex5_orders
+# MAGIC     )
+# MAGIC )
+# MAGIC
+# MAGIC --SELECT DISTINCT CTE.order_id FROM CTE;
+# MAGIC
+# MAGIC  SELECT DISTINCT order_id FROM CTE
+# MAGIC --SELECT * FROM tt_ex5_orders
+# MAGIC
+# MAGIC --# Your code here
+# MAGIC  
+# MAGIC
 
 # COMMAND ----------
 
 # Validate Exercise 5
+CATALOG = "db_code"
+SCHEMA = "time_travel"
 result = spark.table(f"{CATALOG}.{SCHEMA}.tt_ex5_changes")
 
 assert result.count() == 3, f"Expected 3 changed order_ids, got {result.count()}"
@@ -329,16 +429,50 @@ print("Exercise 5 passed!")
 
 # COMMAND ----------
 
+# MAGIC %sql
+# MAGIC SELECT * FROM tt_ex6_orders
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC DESCRIBE HISTORY tt_ex6_orders
+
+# COMMAND ----------
+
+from pyspark.sql import functions as F
+_ = spark.read\
+        .format("delta")\
+        .option("versionAsOf", 8)\
+        .table("tt_ex6_orders")\
+        .withColumn("ver", F.lit(8))
+
+
+
+df_temp = _.select(["order_id","ver"]).filter("order_id = 'ORD-999'")
+ord_id = df_temp.select("order_id").collect()[0]["order_id"]
+
+ver_val = df_temp.select("ver").first()["ver"]
+ver_val
+
+# COMMAND ----------
+
 # EXERCISE_KEY: tt_ex6
 # TODO: Investigate versions to find who introduced the bad data, then fill in values
+CATALOG = "db_code"
+SCHEMA = "time_travel"
 
-bad_version = 0        # Replace: the version number that introduced the fraudulent order
-bad_order_id = ""      # Replace: the order_id of the fraudulent order
+
+bad_version = ver_val        # Replace: the version number that introduced the fraudulent order
+bad_order_id = ord_id      # Replace: the order_id of the fraudulent order
 
 spark.sql(f"""
     CREATE OR REPLACE TABLE {CATALOG}.{SCHEMA}.tt_ex6_audit AS
     SELECT CAST({bad_version} AS INT) AS bad_version, '{bad_order_id}' AS bad_order_id
 """)
+
+# COMMAND ----------
+
+spark.table(f"{CATALOG}.{SCHEMA}.tt_ex6_audit").collect()[0]
 
 # COMMAND ----------
 
@@ -379,6 +513,40 @@ print("Exercise 6 passed!")
 
 # COMMAND ----------
 
+# MAGIC %sql
+# MAGIC DESCRIBE HISTORY tt_ex7_orders
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC SELECT * FROM tt_ex7_orders VERSION AS OF 6 WHERE amount < 100
+
+# COMMAND ----------
+
+spark.read\
+    .format("delta")\
+    .table("tt_ex7_orders")\
+    .show()
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC MERGE INTO tt_ex7_orders tgt USING (SELECT * FROM tt_ex7_orders VERSION AS OF 6 WHERE amount < 100) src
+# MAGIC ON tgt.order_id = src.order_id
+# MAGIC WHEN matched THEN UPDATE SET 
+# MAGIC     tgt.status = src.status
+# MAGIC
+
+# COMMAND ----------
+
+spark.read\
+    .format("delta")\
+    .option("versionAsOf", 9)\
+    .table("tt_ex7_orders")\
+    .show()
+
+# COMMAND ----------
+
 # EXERCISE_KEY: tt_ex7
 # TODO: Use MERGE with time travel to selectively undo the bad update
 
@@ -389,7 +557,7 @@ print("Exercise 6 passed!")
 
 # Validate Exercise 7
 result = spark.table(f"{CATALOG}.{SCHEMA}.tt_ex7_orders")
-v0 = spark.sql(f"SELECT * FROM {CATALOG}.{SCHEMA}.tt_ex7_orders VERSION AS OF 0")
+v0 = spark.sql(f"SELECT * FROM {CATALOG}.{SCHEMA}.tt_ex7_orders VERSION AS OF 6")
 
 assert result.count() == 5, f"Expected 5 rows, got {result.count()}"
 # Orders with amount < 100 should have their v0 status restored
@@ -434,11 +602,41 @@ print("Exercise 7 passed!")
 
 # COMMAND ----------
 
+# MAGIC %sql
+# MAGIC DESCRIBE HISTORY tt_ex8_orders 
+
+# COMMAND ----------
+
+TT_EX8_INSERT_V = 1
+df_prev = spark.read\
+    .format("delta")\
+    .option("verisonAsOf", 3)\
+    .table("tt_ex8_orders")\
+
+df_prev.show()
+
+# COMMAND ----------
+
 # EXERCISE_KEY: tt_ex8
 # TODO: Create the revenue report from the INSERT version (TT_EX8_INSERT_V)
+TT_EX8_INSERT_V = 1
+df_prev = spark.read\
+    .format("delta")\
+    .option("verisonAsOf", TT_EX8_INSERT_V)\
+    .table("tt_ex8_orders")
 
+df_prev.show()
+order_count = df_prev.filter(df_prev.order_id.like("ORD-0%")).count()
+total_amount = df_prev.filter(df_prev.order_id.like("ORD-0%")).groupBy().sum().collect()[0][0]
+total_amount
 # Your code here
 
+df_new = spark.createDataFrame(
+    [(order_count, total_amount)],
+    schema = 'order_count LONG, total_amount DOUBLE'
+)
+
+df_new.writeTo("tt_ex8_report").createOrReplace()
 
 # COMMAND ----------
 
