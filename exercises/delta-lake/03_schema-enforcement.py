@@ -1,5 +1,4 @@
 # Databricks notebook source
-# COMMAND ----------
 # MAGIC %md
 # MAGIC # Schema Enforcement & Evolution
 # MAGIC **Topic**: Delta Lake | **Exercises**: 12 | **Total Time**: ~125 min
@@ -34,6 +33,7 @@
 # MAGIC %run ./setup/schema-enforcement-setup
 
 # COMMAND ----------
+
 # MAGIC %md
 # MAGIC **Setup complete.** Exercise tables are in `{CATALOG}.{SCHEMA}` (schema_enforcement schema).
 # MAGIC Base tables (orders, products) are in `{CATALOG}.{BASE_SCHEMA}` (delta_lake schema).
@@ -51,6 +51,7 @@
 # MAGIC - Ex 12 (hard): `schema_ex12_target` + `_source` - constrained target, source has invalid rows
 
 # COMMAND ----------
+
 # MAGIC %md
 # MAGIC ## Exercise 1: Write with Matching Schema
 # MAGIC **Difficulty**: Easy | **Time**: ~5 min
@@ -68,9 +69,40 @@
 
 # COMMAND ----------
 
+# MAGIC %sql
+# MAGIC USE CATALOG db_code;
+# MAGIC USE SCHEMA schema_enforcement
+
+# COMMAND ----------
+
+df_source = spark.read\
+    .format("delta")\
+    .table("schema_ex1_source")
+
+df_source.show()
+
+# COMMAND ----------
+
+df_target = spark.read\
+    .format("delta")\
+    .table("schema_ex1_target")
+
+df_target.show()
+
+# COMMAND ----------
+
 # EXERCISE_KEY: schema_ex1
 # TODO: Insert source rows into the target table
 
+### I SOLUTION
+#comb = df_target.union(df_source)
+#comb.show()
+
+### II SOLUTION
+df_source.write\
+    .format("delta")\
+    .mode("append")\
+    .saveAsTable("schema_ex1_target")
 # Your code here
 
 
@@ -86,6 +118,7 @@ assert result.filter("order_id = 'ORD-103'").count() == 1, "ORD-103 should be in
 print("Exercise 1 passed!")
 
 # COMMAND ----------
+
 # MAGIC %md
 # MAGIC ## Exercise 2: Handle Schema Mismatch on Write
 # MAGIC **Difficulty**: Easy | **Time**: ~5 min
@@ -106,15 +139,54 @@ print("Exercise 1 passed!")
 
 # COMMAND ----------
 
+df_source = spark.read\
+    .format("delta")\
+    .table("schema_ex2_source")
+
+df_source.show()
+
+# COMMAND ----------
+
+df_target = spark.read\
+    .format("delta")\
+    .table("schema_ex2_target")
+
+df_target.show()
+
+# COMMAND ----------
+
 # EXERCISE_KEY: schema_ex2
 # TODO: Insert source rows into target using only the matching columns
+cols_src = set(df_source.columns)
+cols_tgt = set(df_target.columns)
 
+common_cols = cols_src & cols_tgt
+common_cols
+
+# I SOLUTION
+#df_final = df_target.unionByName(df_source, allowMissingColumns = True) 
+#df_final.show()
+# II SOLUTION
 # Your code here
+
+df_source = df_source.select(*common_cols)
+
+df_source.write\
+    .format("delta")\
+    .mode("append")\
+    .saveAsTable("schema_ex2_target")
+
 
 
 # COMMAND ----------
 
+df_target.show()
+
+# COMMAND ----------
+
 # Validate Exercise 2
+CATALOG = "db_code"
+SCHEMA = "schema_enforcement"
 result = spark.table(f"{CATALOG}.{SCHEMA}.schema_ex2_target")
 
 assert result.count() == 8, f"Expected 8 rows, got {result.count()}"
@@ -125,6 +197,7 @@ assert result.filter("order_id = 'ORD-101'").count() == 1, "ORD-101 should be in
 print("Exercise 2 passed!")
 
 # COMMAND ----------
+
 # MAGIC %md
 # MAGIC ## Exercise 3: Additive Schema Evolution with mergeSchema
 # MAGIC **Difficulty**: Medium | **Time**: ~10 min
@@ -148,8 +221,27 @@ print("Exercise 2 passed!")
 
 # COMMAND ----------
 
+df_source = spark.read\
+    .format("delta")\
+    .table("schema_ex3_source")
+
+df_source.show()
+
+# COMMAND ----------
+
+df_target = spark.read\
+    .format("delta")\
+    .table("schema_ex3_target")
+
+df_target.show()
+
+# COMMAND ----------
+
 # EXERCISE_KEY: schema_ex3
 # TODO: Append source to target with schema evolution
+df_final = df_source.unionByName(df_target, allowMissingColumns = True).dropDuplicates()
+
+df_final.writeTo("schema_ex3_target").createOrReplace()
 
 # Your code here
 
@@ -170,6 +262,7 @@ assert result.filter("order_id = 'ORD-101'").select("discount_pct").collect()[0]
 print("Exercise 3 passed!")
 
 # COMMAND ----------
+
 # MAGIC %md
 # MAGIC ## Exercise 4: Overwrite Schema for Breaking Change
 # MAGIC **Difficulty**: Medium | **Time**: ~10 min
@@ -193,9 +286,25 @@ print("Exercise 3 passed!")
 
 # COMMAND ----------
 
+df_source = spark.read\
+    .format("delta")\
+    .table("schema_ex4_source")
+
+df_source.show()
+
+# COMMAND ----------
+
+df_target = spark.read\
+                .format("delta")\
+                .table("schema_ex4_target")
+
+df_target.show()
+
+# COMMAND ----------
+
 # EXERCISE_KEY: schema_ex4
 # TODO: Overwrite target with source data and replace the schema
-
+df_source.writeTo("schema_ex4_target").createOrReplace()
 # Your code here
 
 
@@ -212,6 +321,7 @@ assert "order_id" not in result.columns, "Old orders schema should be gone"
 print("Exercise 4 passed!")
 
 # COMMAND ----------
+
 # MAGIC %md
 # MAGIC ## Exercise 5: Handle Column Type Mismatch
 # MAGIC **Difficulty**: Medium | **Time**: ~10 min
@@ -235,11 +345,42 @@ print("Exercise 4 passed!")
 
 # COMMAND ----------
 
+df_source = spark.read\
+    .format("delta")\
+    .table("schema_ex5_source")
+
+print(df_source.dtypes)
+
+df_source.show()
+
+# COMMAND ----------
+
+df_target = spark.read\
+    .format("delta")\
+    .table("schema_ex5_target")
+
+print(df_target.dtypes)
+
+df_target.show()
+
+# COMMAND ----------
+
 # EXERCISE_KEY: schema_ex5
 # TODO: Insert source rows with type casting for amount
+from pyspark.sql import functions as F
+from pyspark.sql.types import DoubleType
+df_source = df_source.withColumn("amount",F.col("amount").cast(DoubleType()))
 
+print(df_source.dtypes)
+df_source.show()
 # Your code here
 
+
+# COMMAND ----------
+
+
+df_final = df_target.union(df_source)
+df_final.writeTo("schema_ex5_target").createOrReplace()
 
 # COMMAND ----------
 
@@ -254,6 +395,7 @@ assert isinstance(val, float), f"amount should be DOUBLE (float), got {type(val)
 print("Exercise 5 passed!")
 
 # COMMAND ----------
+
 # MAGIC %md
 # MAGIC ## Exercise 6: NOT NULL Constraint Enforcement
 # MAGIC **Difficulty**: Medium | **Time**: ~10 min
@@ -296,6 +438,7 @@ assert not status_field.nullable, "status column should be NOT NULL"
 print("Exercise 6 passed!")
 
 # COMMAND ----------
+
 # MAGIC %md
 # MAGIC ## Exercise 7: CHECK Constraint Enforcement
 # MAGIC **Difficulty**: Medium | **Time**: ~10 min
@@ -338,6 +481,7 @@ assert check_rows > 0, "Should have at least one CHECK constraint"
 print("Exercise 7 passed!")
 
 # COMMAND ----------
+
 # MAGIC %md
 # MAGIC ## Exercise 8: Drop a Constraint
 # MAGIC **Difficulty**: Medium | **Time**: ~10 min
@@ -378,6 +522,7 @@ assert not status_field.nullable, "status NOT NULL constraint should still exist
 print("Exercise 8 passed!")
 
 # COMMAND ----------
+
 # MAGIC %md
 # MAGIC ## Exercise 9: Query Table Properties for Constraints
 # MAGIC **Difficulty**: Medium | **Time**: ~10 min
@@ -426,6 +571,7 @@ assert any("amount > 0" in expr for expr in expressions), \
 print("Exercise 9 passed!")
 
 # COMMAND ----------
+
 # MAGIC %md
 # MAGIC ## Exercise 10: Schema Evolution Through MERGE
 # MAGIC **Difficulty**: Hard | **Time**: ~15 min
@@ -475,6 +621,7 @@ assert result.filter("order_id = 'ORD-101'").select("shipping_cost").collect()[0
 print("Exercise 10 passed!")
 
 # COMMAND ----------
+
 # MAGIC %md
 # MAGIC ## Exercise 11: Constraint Violation Handling
 # MAGIC **Difficulty**: Hard | **Time**: ~15 min
@@ -525,6 +672,7 @@ assert result.filter("order_id = 'ORD-203'").count() == 0, "ORD-203 (null status
 print("Exercise 11 passed!")
 
 # COMMAND ----------
+
 # MAGIC %md
 # MAGIC ## Exercise 12: MERGE with Constraint-Safe Filtering
 # MAGIC **Difficulty**: Hard | **Time**: ~15 min
