@@ -1,5 +1,4 @@
 # Databricks notebook source
-# COMMAND ----------
 # MAGIC %md
 # MAGIC # Change Data Feed (CDF)
 # MAGIC **Topic**: Delta Lake | **Exercises**: 7 | **Total Time**: ~80 min
@@ -29,6 +28,7 @@
 # MAGIC %run ./setup/change-data-feed-setup
 
 # COMMAND ----------
+
 # MAGIC %md
 # MAGIC **Setup complete.** Exercise tables are in `{CATALOG}.{SCHEMA}` (change_data_feed schema).
 # MAGIC Base tables (orders) are in `{CATALOG}.{BASE_SCHEMA}` (delta_lake schema).
@@ -42,6 +42,7 @@
 # MAGIC - Ex 7 (hard): `cdf_ex7_orders` - CDF enabled, then MERGE at v1 (1 update + 1 insert)
 
 # COMMAND ----------
+
 # MAGIC %md
 # MAGIC ## Exercise 1: Enable CDF on an Existing Table
 # MAGIC **Difficulty**: Easy | **Time**: ~5 min
@@ -54,6 +55,49 @@
 # MAGIC
 # MAGIC **Requirements**:
 # MAGIC 1. Use `ALTER TABLE SET TBLPROPERTIES` to enable CDF
+
+# COMMAND ----------
+
+CATALOG = "db_code"
+SCHEMA = "change_data_feed"
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC USE CATALOG db_code;
+# MAGIC USE SCHEMA change_data_feed
+
+# COMMAND ----------
+
+spark.read\
+    .format("delta")\
+    .table("cdf_ex1_orders")\
+    .show()
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC SHOW TBLPROPERTIES cdf_ex1_orders
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC DESCRIBE DETAIL cdf_ex1_orders
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC ALTER TABLE cdf_ex1_orders SET TBLPROPERTIES (delta.enableChangeDataFeed = true)
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC SHOW TBLPROPERTIES cdf_ex1_orders
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC DESCRIBE DETAIL cdf_ex1_orders
 
 # COMMAND ----------
 
@@ -75,6 +119,7 @@ assert cdf_rows[0].value == "true", f"CDF should be enabled, got '{cdf_rows[0].v
 print("Exercise 1 passed!")
 
 # COMMAND ----------
+
 # MAGIC %md
 # MAGIC ## Exercise 2: Read Changes After INSERT
 # MAGIC **Difficulty**: Easy | **Time**: ~5 min
@@ -90,6 +135,31 @@ print("Exercise 1 passed!")
 # MAGIC **Requirements**:
 # MAGIC 1. Use `table_changes()` to read changes from version 1
 # MAGIC 2. Save the result as `cdf_ex2_changes`
+
+# COMMAND ----------
+
+spark.read\
+    .format("delta")\
+    .table("cdf_ex2_orders")\
+    .show()
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC DESCRIBE HISTORY cdf_ex2_orders
+
+# COMMAND ----------
+
+spark.read\
+    .format("delta")\
+    .option("versionAsOf",0)\
+    .table("cdf_ex2_orders")\
+    .show()
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC CREATE TABLE cdf_ex2_changes AS SELECT * FROM table_changes('cdf_ex2_orders',1)
 
 # COMMAND ----------
 
@@ -112,6 +182,7 @@ assert result.filter("order_id = 'ORD-101'").count() == 1, "ORD-101 should be in
 print("Exercise 2 passed!")
 
 # COMMAND ----------
+
 # MAGIC %md
 # MAGIC ## Exercise 3: Read Changes After UPDATE
 # MAGIC **Difficulty**: Medium | **Time**: ~10 min
@@ -128,6 +199,23 @@ print("Exercise 2 passed!")
 # MAGIC **Requirements**:
 # MAGIC 1. Use `table_changes()` to read changes from version 1
 # MAGIC 2. Save the result as `cdf_ex3_changes`
+
+# COMMAND ----------
+
+spark.read\
+    .format("delta")\
+    .table("cdf_ex3_orders")\
+    .show()
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC DESCRIBE HISTORY cdf_ex3_orders
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC CREATE TABLE cdf_ex3_changes AS SELECT * FROM table_changes('cdf_ex3_orders',1)
 
 # COMMAND ----------
 
@@ -153,6 +241,7 @@ assert post.amount == 120.00, f"Updated amount should be 120.00, got {post.amoun
 print("Exercise 3 passed!")
 
 # COMMAND ----------
+
 # MAGIC %md
 # MAGIC ## Exercise 4: Read Changes After DELETE
 # MAGIC **Difficulty**: Medium | **Time**: ~10 min
@@ -168,6 +257,33 @@ print("Exercise 3 passed!")
 # MAGIC **Requirements**:
 # MAGIC 1. Use `table_changes()` to read changes from version 1
 # MAGIC 2. Save the result as `cdf_ex4_changes`
+
+# COMMAND ----------
+
+spark.read\
+    .format("delta")\
+    .table("cdf_ex4_orders")\
+    .show()
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC SHOW TBLPROPERTIES cdf_ex4_orders
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC DESCRIBE HISTORY cdf_ex4_orders
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC CREATE TABLE cdf_ex4_changes AS SELECT * FROM table_changes('cdf_ex4_orders',1)
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC SELECT * FROM cdf_ex4_changes
 
 # COMMAND ----------
 
@@ -190,6 +306,7 @@ assert row.order_id == "ORD-005", f"Deleted order should be ORD-005, got '{row.o
 print("Exercise 4 passed!")
 
 # COMMAND ----------
+
 # MAGIC %md
 # MAGIC ## Exercise 5: Filter CDF by Operation Type
 # MAGIC **Difficulty**: Medium | **Time**: ~10 min
@@ -207,6 +324,16 @@ print("Exercise 4 passed!")
 # MAGIC 1. Use `table_changes()` to read changes from version 1 through current
 # MAGIC 2. Filter for `_change_type = 'insert'` only
 # MAGIC 3. Save as `cdf_ex5_inserts`
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC DESCRIBE HISTORY cdf_ex5_orders
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC CREATE TABLE cdf_ex5_inserts AS SELECT * FROM table_changes('cdf_ex5_orders',1) WHERE _change_type = 'insert'
 
 # COMMAND ----------
 
@@ -229,6 +356,7 @@ assert result.collect()[0].order_id == "ORD-101", "Insert should be ORD-101"
 print("Exercise 5 passed!")
 
 # COMMAND ----------
+
 # MAGIC %md
 # MAGIC ## Exercise 6: Propagate Changes to Downstream Table
 # MAGIC **Difficulty**: Hard | **Time**: ~20 min
@@ -251,6 +379,52 @@ print("Exercise 5 passed!")
 # MAGIC
 # MAGIC **Approach**: MERGE INTO target USING (filtered CDF) ON order_id. Use multiple WHEN
 # MAGIC MATCHED clauses to handle deletes vs updates. WHEN NOT MATCHED for inserts.
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC DESCRIBE HISTORY cdf_ex6_source
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC DESCRIBE HISTORY cdf_ex6_target
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC SELECT * FROM table_changes('cdf_ex6_source',1) WHERE _change_type NOT IN ('update_preimage','update_postimage')
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC MERGE INTO cdf_ex6_target tgt USING (
+# MAGIC     SELECT order_id, customer_id, product_id, amount, status, order_date, updated_at, _change_type FROM table_changes('cdf_ex6_source',1)
+# MAGIC     WHERE _change_type != 'update_preimage'
+# MAGIC ) src
+# MAGIC ON tgt.order_id = src.order_id
+# MAGIC WHEN MATCHED AND src._change_type = 'update_postimage' THEN UPDATE SET 
+# MAGIC     tgt.customer_id = src.customer_id,
+# MAGIC     tgt.product_id = src.product_id,
+# MAGIC     tgt.amount = src.amount,
+# MAGIC     tgt.status = src.status,
+# MAGIC     tgt.order_date = src.order_date,
+# MAGIC     tgt.updated_at = src.updated_at
+# MAGIC
+# MAGIC WHEN MATCHED AND src._change_type = 'delete' THEN DELETE
+# MAGIC
+# MAGIC WHEN NOT MATCHED AND src._change_type = 'insert' THEN INSERT (order_id, customer_id, product_id, amount, status, order_date, updated_at) VALUES (
+# MAGIC     src.order_id, src.customer_id, src.product_id, src.amount, src.status, src.order_date, src.updated_at
+# MAGIC ) 
+# MAGIC
+# MAGIC
+
+# COMMAND ----------
+
+spark.read\
+    .format("delta")\
+    .table("cdf_ex6_source")\
+    .show()
 
 # COMMAND ----------
 
@@ -278,6 +452,7 @@ assert target.filter("order_id = 'ORD-101'").count() == 1, \
 print("Exercise 6 passed!")
 
 # COMMAND ----------
+
 # MAGIC %md
 # MAGIC ## Exercise 7: Read CDF from a MERGE Operation
 # MAGIC **Difficulty**: Hard | **Time**: ~15 min
@@ -293,6 +468,16 @@ print("Exercise 6 passed!")
 # MAGIC **Requirements**:
 # MAGIC 1. Use `table_changes()` to read changes from version 1
 # MAGIC 2. Save the result as `cdf_ex7_changes`
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC DESCRIBE HISTORY cdf_ex7_orders
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC CREATE TABLE cdf_ex7_changes AS SELECT * FROM table_changes('cdf_ex7_orders',1)
 
 # COMMAND ----------
 

@@ -417,15 +417,80 @@ print("Exercise 5 passed!")
 
 # COMMAND ----------
 
+spark.read\
+    .format("delta")\
+    .table("schema_ex6_orders")\
+    .show()
+
+# COMMAND ----------
+
+
 # EXERCISE_KEY: schema_ex6
 # TODO: Add NOT NULL constraint on status, then insert a valid row
-
+spark.sql("ALTER TABLE schema_ex6_orders ALTER COLUMN status SET NOT NULL")
 # Your code here
 
 
 # COMMAND ----------
 
+# MAGIC %sql
+# MAGIC SHOW TBLPROPERTIES schema_ex6_orders
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC DESCRIBE DETAIL schema_ex6_orders
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC USE CATALOG db_code;
+# MAGIC USE SCHEMA schema_enforcement
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC SHOW CREATE TABLE schema_ex6_orders
+
+# COMMAND ----------
+
+df.dtypes
+
+# COMMAND ----------
+
+from pyspark.sql import Row
+from pyspark.sql import functions as F
+from datetime import date, datetime 
+
+df = spark.read\
+        .format("delta")\
+        .table("schema_ex6_orders")
+
+new_row = spark.createDataFrame(
+        [Row(order_id = 'ORD-101', customer_id = 'CUST-010', product_id = 'PROD-005',amount = 49.99, status = 'pending', order_date = date(2026,3,1), updated_at = datetime(2026,3,1,10,0,0))],
+        schema = df.schema)
+print(new_row.dtypes)
+
+df_combined = df.unionByName(new_row)
+df_combined.show()
+df_combined.writeTo("schema_ex6_orders").createOrReplace()
+
+spark.sql("ALTER TABLE schema_ex6_orders SET NOT NULL")
+
+# COMMAND ----------
+
+spark.sql("ALTER TABLE schema_ex6_orders ALTER COLUMN status SET NOT NULL")
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC SHOW CREATE TABLE schema_ex6_orders
+
+# COMMAND ----------
+
 # Validate Exercise 6
+CATALOG = "db_code"
+SCHEMA = "schema_enforcement"
 result = spark.table(f"{CATALOG}.{SCHEMA}.schema_ex6_orders")
 
 assert result.count() == 6, f"Expected 6 rows, got {result.count()}"
@@ -460,9 +525,29 @@ print("Exercise 6 passed!")
 
 # COMMAND ----------
 
+spark.read\
+    .format("delta")\
+    .table("schema_ex7_orders")\
+    .show()
+
+# COMMAND ----------
+
+from pyspark.sql import Row
+from datetime import date, datetime
 # EXERCISE_KEY: schema_ex7
 # TODO: Add CHECK constraint, then insert a valid row
+spark.sql("ALTER TABLE schema_ex7_orders ADD CONSTRAINT positive_amount CHECK (amount >0)")
 
+df = spark.read\
+    .format("delta")\
+    .table("schema_ex7_orders")
+
+df_temp = spark.createDataFrame([
+    Row(order_id = 'ORD-101', customer_id = 'CUST-010', product_id = 'PROD-005', amount = 49.99, status= 'pending', order_date = date(2026,3,1), updated_at =  datetime(2026,3,1,10,0,0))],
+            schema = df.schema
+    )
+
+df_temp.writeTo("schema_ex7_orders").append()
 # Your code here
 
 
@@ -502,7 +587,7 @@ print("Exercise 7 passed!")
 
 # EXERCISE_KEY: schema_ex8
 # TODO: Drop the positive_amount CHECK constraint
-
+spark.sql("ALTER TABLE schema_ex8_orders DROP CONSTRAINT positive_amount")
 # Your code here
 
 
@@ -547,15 +632,50 @@ print("Exercise 8 passed!")
 
 # COMMAND ----------
 
+# MAGIC %sql
+# MAGIC SHOW TBLPROPERTIES schema_ex9_orders
+
+# COMMAND ----------
+
 # EXERCISE_KEY: schema_ex9
 # TODO: Query table properties for constraints and save to schema_ex9_constraints
+from pyspark.sql import Row
+from datetime import date, datetime
 
+df = spark.sql("SHOW TBLPROPERTIES schema_ex9_orders")
+
+df.filter("key LIKE 'delta.constraints.%'").show()
+first_row_col = df.filter("key LIKE 'delta.constraints.%'").collect()[0][0]
+first_row_col = first_row_col.split(".")[2]
+first_row_val = df.filter("key LIKE 'delta.constraints.%'").collect()[0][1]
+first_row_val
+
+second_row_col = df.filter("key LIKE 'delta.constraints.%'").collect()[1][0]
+second_row_col = second_row_col.split(".")[2]
+second_row_val = df.filter("key LIKE 'delta.constraints.%'").collect()[1][1]
+second_row_val
 # Your code here
+
+#print(f'''{first_row_col},\n
+#      {first_row_val}''')
+
+df = spark.createDataFrame([
+    Row(constraint_name = f"{first_row_col}", constraint_expression = f"{first_row_val}"),
+    Row(constraint_name = f"{second_row_col}", constraint_expression = f"{second_row_val}")
+])
+
+df.writeTo("schema_ex9_constraints").createOrReplace()
 
 
 # COMMAND ----------
 
 # Validate Exercise 9
+'''
+PRO SOLUTION
+constraints = props.filter("key LIKE 'delta.constraints.%'") \
+    .selectExpr("key AS constraint_name", "value AS constraint_expression")
+'''
+
 result = spark.table(f"{CATALOG}.{SCHEMA}.schema_ex9_constraints")
 
 assert result.count() >= 2, f"Expected at least 2 constraints, got {result.count()}"
@@ -597,15 +717,39 @@ print("Exercise 9 passed!")
 
 # COMMAND ----------
 
+spark.read\
+    .format("delta")\
+    .table("schema_ex10_source")\
+    .show()
+
+spark.read\
+    .format("delta")\
+    .table("schema_ex10_target")\
+    .show()
+
+# COMMAND ----------
+
 # EXERCISE_KEY: schema_ex10
 # TODO: Enable schema evolution and MERGE source into target
-
+spark.sql("""
+          MERGE WITH SCHEMA EVOLUTION INTO schema_ex10_target tgt USING schema_ex10_source src ON
+          tgt.order_id = src.order_id
+          WHEN MATCHED THEN UPDATE SET *
+          WHEN NOT MATCHED THEN INSERT *
+          """)
 # Your code here
 
 
 # COMMAND ----------
 
+# MAGIC %sql
+# MAGIC SELECT * FROM schema_ex10_target
+
+# COMMAND ----------
+
 # Validate Exercise 10
+CATALOG = "db_code"
+SCHEMA = "schema_enforcement"
 result = spark.table(f"{CATALOG}.{SCHEMA}.schema_ex10_target")
 
 assert result.count() == 6, f"Expected 6 rows, got {result.count()}"
@@ -653,11 +797,28 @@ print("Exercise 10 passed!")
 
 # COMMAND ----------
 
+from pyspark.sql import Row, functions as F
+from datetime import datetime, date
+
 # EXERCISE_KEY: schema_ex11
 # TODO: Filter out constraint-violating rows and insert only valid ones
-
+df = spark.read\
+    .format("delta")\
+    .table("schema_ex11_orders")\
 # Your code here
 
+
+df_temp = spark.createDataFrame([
+    Row(order_id = 'ORD-201', customer_id = 'CUST-020', product_id = 'PROD-005', amount = 49.99, status = 'pending', order_date = date(2026,3,1), updated_at = datetime(2026,3,1,10,0,0)),
+    Row(order_id = 'ORD-202', customer_id = 'CUST-021', product_id = 'PROD-003', amount = -10.0, status = 'completed', order_date = date(2026,3,1), updated_at = datetime(2026,3,1,10,0,0)),
+    Row(order_id = 'ORD-203', customer_id = 'CUST-022', product_id = 'PROD-001', amount = 75.55, status = None, order_date = date(2026,3,1), updated_at = datetime(2026,3,1,10,0,0)),
+])
+
+df_temp.show()
+
+df_temp = df_temp.filter("amount > 0 AND status IS NOT NULL")
+
+df_temp.writeTo("schema_ex11_orders").append()
 
 # COMMAND ----------
 
@@ -701,6 +862,32 @@ print("Exercise 11 passed!")
 # MAGIC
 # MAGIC **Approach**: Pre-filter the source inside the USING subquery with the same conditions
 # MAGIC the constraints enforce (status IS NOT NULL AND amount > 0).
+
+# COMMAND ----------
+
+spark.read\
+    .format("delta")\
+    .table("schema_ex12_source")\
+    .show()
+
+spark.read\
+    .format("delta")\
+    .table("schema_ex12_target")\
+    .show()
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC MERGE INTO schema_ex12_target tgt USING 
+# MAGIC (SELECT * FROM schema_ex12_source WHERE amount > 0 AND status IS NOT NULL) src
+# MAGIC ON src.order_id = tgt.order_id
+# MAGIC WHEN MATCHED THEN UPDATE SET *
+# MAGIC WHEN NOT MATCHED THEN INSERT *
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC SHOW TBLPROPERTIES schema_ex12_target
 
 # COMMAND ----------
 
